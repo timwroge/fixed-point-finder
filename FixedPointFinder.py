@@ -27,6 +27,7 @@ class FixedPointFinder(object):
         tol=1e-20,
         max_iters=5000,
         method='joint',
+        pca=None,
         do_rerun_outliers=False,
         outlier_q_scale=10,
         tol_unique=1e-3,
@@ -119,6 +120,7 @@ class FixedPointFinder(object):
         # *********************************************************************
         self.tol = tol
         self.method = method
+        self.pca = pca
         self.max_iters = max_iters
         self.do_rerun_outliers = do_rerun_outliers
         self.outlier_q_scale = outlier_q_scale
@@ -207,7 +209,7 @@ class FixedPointFinder(object):
             fixed points after optimizing from all initial_states. Two fixed
             points are considered unique if all absolute elementwise
             differences are less than tol_unique AND the corresponding inputs
-            are unqiue following the same criteria. See FixedPoints.py for
+            are unique following the same criteria. See FixedPoints.py for
             additional detail.
 
             all_fps: A FixedPoints object containing the likely redundant set
@@ -247,8 +249,12 @@ class FixedPointFinder(object):
         # Optionally run additional optimization iterations on identified
         # fixed points with q values on the large side of the q-distribution.
         if self.do_rerun_outliers:
-            unique_fps = self._run_additional_iterations_on_outliers(
-                unique_fps)
+            if self.pca is None:
+                unique_fps = self._run_additional_iterations_on_outliers(
+                    unique_fps)
+            else:
+                raise ValueError(
+                    'do_rerun_outliers is not yet supported with PCA')
 
             # Filter out duplicates after from the second optimization round
             unique_fps = unique_fps.get_unique()
@@ -530,7 +536,10 @@ class FixedPointFinder(object):
         else:
             return states
 
-    def _grab_RNN(self, initial_states, inputs):
+    def _grab_RNN(
+        self,
+        initial_states,
+        inputs):
         '''Creates objects for interfacing with the RNN.
 
         These objects include 1) the optimization variables (initialized to
@@ -559,16 +568,65 @@ class FixedPointFinder(object):
             function of the RNN applied to x.
         '''
 
+        if self.pca is None:
+            # Standard optimization, in high-d space
+            inputs_tf = tf.constant(inputs, dtype=self.tf_dtype)
+
+            if self.is_lstm:
+                c_h_init = tf_utils.convert_from_LSTMStateTuple(initial_states)
+                x = tf.Variable(c_h_init, dtype=self.tf_dtype)
+                x_rnncell = tf_utils.convert_to_LSTMStateTuple(x)
+            else:
+                x = tf.Variable(initial_states, dtype=self.tf_dtype)
+                x_rnncell = x
+
+            # n = x.shape[0]
+            output, F_rnncell = self.rnn_cell(inputs_tf, x_rnncell)
+
+            if self.is_lstm:
+                F = tf_utils.convert_from_LSTMStateTuple(F_rnncell)
+            else:
+                F = F_rnncell
+
+            init = tf.variables_initializer(var_list=[x])
+            self.session.run(init)
+
+            return x, F
+        else:
+            return self._grab_RNN_with_PCA(initial_states, inputs)
+
+    def _grab_RNN_with_PCA(self, initial_states, inputs):
+        # Optimization in low-d space specified by pca
+        # In development.
+
+        inputs_tf = tf.constant(inputs, dtype=self.tf_dtype)
+
         if self.is_lstm:
-            c_h_init = tf_utils.convert_from_LSTMStateTuple(initial_states)
-            x = tf.Variable(c_h_init, dtype=self.tf_dtype)
+            x_init = tf_utils.convert_from_LSTMStateTuple(initial_states)
+        else:
+            x_init = initial_states
+
+        U = self.pca.components_ # has shape [n_components, x_dim]
+        mu = self.pca.mean_ # has shape [x_dim,]
+
+        z_init = self.pca.transform(x_init)
+        # equivalently: np.matmul(U, np.transpose(x_init-mu))
+
+        z = tf.Variable(z_init, dtype=self.tf_dtype)
+
+        U_tf = tf.constant(U, dtype=self.tf_dtype)
+        mu_tf = tf.constant(mu, dtype=self.tf_dtype)
+
+        # Note, potential broadcasting ambiguity if n_inits == x_dim
+        x_minus_mu = tf.matmul(z, U_tf) # shape [n_inits, x_dim]
+        x = tf.add(x_minus_mu, mu_tf) # shape [n_inits, x_dim]
+
+        if self.is_lstm:
             x_rnncell = tf_utils.convert_to_LSTMStateTuple(x)
         else:
-            x = tf.Variable(initial_states, dtype=self.tf_dtype)
             x_rnncell = x
 
-        n = x.shape[0]
-        inputs_tf = tf.constant(inputs, dtype=self.tf_dtype)
+        # n = x.shape[0]
 
         output, F_rnncell = self.rnn_cell(inputs_tf, x_rnncell)
 
@@ -577,10 +635,34 @@ class FixedPointFinder(object):
         else:
             F = F_rnncell
 
-        init = tf.variables_initializer(var_list=[x])
+        Fz = tf.matmul(tf.subtract(F, mu_tf), tf.transpose(U_tf))
+
+        init = tf.variables_initializer(var_list=[z])
         self.session.run(init)
 
-        return x, F
+        return z, Fz
+
+    # NO LONGER USED - This is taken care of for the single currently supported
+    # case in _compute_multiple_jacobians_np(...)
+    #
+    # This was intended for conversions when passed around FP objects used
+    # the PCA representation. In that case it was needed for subsequent calls
+    # to _grab_RNN, when initial_states were in PC space.
+    def _grab_RNN_post_PCA(self, initial_states_z, inputs):
+        # initial_states have already been transformed using pca
+        # --> regardless of lstm, they are not as LSTMStateTuple
+
+        # 1. Transform z-->x
+        initial_states_x = self.pca.inverse_transform(initial_states_z)
+
+        # 2. If LSTM, transform again to LSTMStateTuple
+        if self.is_lstm:
+            initial_states = tf.utils.convert_to_LSTMStateTuple(
+                initial_states_x)
+        else:
+            initial_states = initial_states_x
+
+        return self._grab_RNN_with_PCA(initial_states, inputs)
 
     def _run_single_optimization(self, initial_state, inputs):
         '''Finds a single fixed point from a single initial state.
@@ -806,10 +888,15 @@ class FixedPointFinder(object):
         '''
         inputs_np = fps.inputs
 
-        if self.is_lstm:
-            states_np = tf_utils.convert_to_LSTMStateTuple(fps.xstar)
+        if self.pca is not None:
+            xstar = self.pca.inverse_transform(fps.xstar)
         else:
-            states_np = fps.xstar
+            xstar = fps.xstar
+
+        if self.is_lstm:
+            states_np = tf_utils.convert_to_LSTMStateTuple(xstar)
+        else:
+            states_np = xstar
 
         x_tf, F_tf = self._grab_RNN(states_np, inputs_np)
         try:
