@@ -496,8 +496,6 @@ class FixedPoints(object):
             plot_stop_time (optional): int specifying the last timestep to
             plot in the example trials of stat_traj. Default: n_time.
 
-            stop_time (optional):
-
             mode_scale (optional): Non-negative float specifying the scaling
             of the plotted eigenmodes. A value of 1.0 results in each mode
             plotted as a set of diametrically opposed line segments
