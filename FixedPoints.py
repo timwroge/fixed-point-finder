@@ -33,6 +33,8 @@ class FixedPoints(object):
                  dq=None,
                  n_iters=None,
                  J_xstar=None,
+                 eigval_J_xstar=None,
+                 eigvec_J_xstar=None,
                  do_alloc_nan=False,
                  n=None,
                  n_states=None,
@@ -85,7 +87,16 @@ class FixedPoints(object):
             which results in an appropriately sized numpy array of NaNs.
             Default: None.
 
-            do_alloc_nan: Bool indicating whether to initialize all data attributes (all optional args above) as NaN-filled numpy arrays.
+            eigval_J_xstar: [n x n_states] numpy array containing with
+            eigval_J_xstar[i, :] containing the eigenvalues of
+            J_xstar[i, :, :]. Default: None.
+
+            eigvec_J_xstar: [n x n_states x n_states] numpy array containing
+            with eigvec_J_xstar[i, :, :] containing the eigenvectors of
+            J_xstar[i, :, :]. Default: None.
+
+            do_alloc_nan: Bool indicating whether to initialize all data
+            attributes (all optional args above) as NaN-filled numpy arrays.
             If True, n, n_states and n_inputs must be provided. These values
             are otherwise ignored:
 
@@ -132,7 +143,7 @@ class FixedPoints(object):
 
         if do_alloc_nan:
             if n is None:
-                raise ValueError(       'n must be provided if '
+                raise ValueError('n must be provided if '
                                  'do_alloc_nan == True.')
             if n_states is None:
                 raise ValueError('n_states must be provided if '
@@ -153,6 +164,8 @@ class FixedPoints(object):
             self.dq = self._alloc_nan((n))
             self.n_iters = self._alloc_nan((n))
             self.J_xstar = self._alloc_nan((n, n_states, n_states))
+            self.eigval_J_xstar = self._alloc_nan((n, n_states))
+            self.eigvec_J_xstar = self._alloc_nan((n, n_states, n_states))
 
         else:
             if xstar is not None:
@@ -182,6 +195,8 @@ class FixedPoints(object):
             self.dq = dq
             self.n_iters = n_iters
             self.J_xstar = J_xstar
+            self.eigval_J_xstar = eigval_J_xstar
+            self.eigvec_J_xstar = eigvec_J_xstar
 
     def _alloc_nan(self, shape):
         '''Returns a nan-filled numpy array.
@@ -279,6 +294,12 @@ class FixedPoints(object):
         if self.J_xstar is not None:
             self.J_xstar[index] = fps.J_xstar
 
+        if self.eigval_J_xstar is not None:
+            self.eigval_J_xstar[index] = fps.eigval_J_xstar
+
+        if self.eigvec_J_xstar is not None:
+            self.eigvec_J_xstar[index] = fps.eigvec_J_xstar
+
     def __getitem__(self, index):
         '''Indexes into a subset of the fixed points and their associated data.
 
@@ -305,6 +326,9 @@ class FixedPoints(object):
         dq = self._safe_index(self.dq, index)
         n_iters = self._safe_index(self.n_iters, index)
         J_xstar = self._safe_index(self.J_xstar, index)
+        eigval_J_xstar = self._safe_index(self.eigval_J_xstar, index)
+        eigvec_J_xstar = self._safe_index(self.eigvec_J_xstar, index)
+
 
         dtype = self.dtype
         tol_unique = self.tol_unique
@@ -317,6 +341,8 @@ class FixedPoints(object):
             dq=dq,
             n_iters=n_iters,
             J_xstar = J_xstar,
+            eigval_J_xstar=eigval_J_xstar,
+            eigvec_J_xstar=eigvec_J_xstar,
             dtype=dtype,
             tol_unique=tol_unique)
 
@@ -528,18 +554,14 @@ class FixedPoints(object):
             elif n_states == 1:
                 ax.plot(z, **kwargs)
 
-        def plot_fixed_point(ax, xstar, J, pca,
+        def plot_fixed_point(ax, fp, pca,
             scale=1.0, max_n_modes=3, do_plot_stable_modes=False):
             '''Plots a single fixed point and its dominant eigenmodes.
 
             Args:
                 ax: Matplotlib figure axis on which to plot everything.
 
-                xstar: [1 x n_states] numpy array representing the fixed point
-                to be plotted.
-
-                J: [n_states x n_states] numpy array containing the Jacobian of the
-                RNN transition function at fixed point xstar.
+                fp: A FixedPoints object containing a single fixed point.
 
                 pca: PCA object as returned by sklearn.decomposition.PCA. This
                 is used to transform the high-d state space representations
@@ -560,25 +582,29 @@ class FixedPoints(object):
             Returns:
                 None.
             '''
-            n_states = xstar.shape[1]
-            e_vals, e_vecs = np.linalg.eig(J)
-            sorted_e_val_idx = np.argsort(np.abs(e_vals))
 
-            if max_n_modes > len(e_vals):
-                max_n_modes = e_vals
+            xstar = fp.xstar # shape [1, n_states]
+            J = fp.J_xstar # shape [1, n_states, n_states]
+            e_vals = fp.eigval_J_xstar # shape [1, n_states]
+            e_vecs = fp.eigvec_J_xstar # shape [1, n_states, n_states]
+            sorted_e_val_idx = np.argsort(np.abs(e_vals))
+            n_states = xstar.shape[1]
+
+            if max_n_modes > n_states:
+                max_n_modes = n_states
 
             for mode_idx in range(max_n_modes):
 
                 # -[1, 2, ..., max_n_modes]
-                idx = sorted_e_val_idx[-(mode_idx+1)]
+                idx = sorted_e_val_idx[0, -(mode_idx+1)]
 
                 # Magnitude of complex eigenvalue
-                e_val_mag = np.abs(e_vals[idx])
+                e_val_mag = np.abs(e_vals[0, idx])
 
                 if e_val_mag > 1.0 or do_plot_stable_modes:
 
                     # Already real. Cast to avoid warning.
-                    e_vec = np.real(e_vecs[:,idx])
+                    e_vec = np.real(e_vecs[0, :, idx])
 
                     # [1 x d] numpy arrays
                     xstar_plus = xstar + scale*e_val_mag*e_vec
@@ -600,7 +626,7 @@ class FixedPoints(object):
 
                     plot_123d(ax, zstar_mode, color=color)
 
-            is_stable = all(np.abs(e_vals) < 1.0)
+            is_stable = np.all(np.abs(e_vals) < 1.0)
             if is_stable:
                 color = 'k'
             else:
@@ -686,12 +712,7 @@ class FixedPoints(object):
                 plot_123d(ax, z_idx, color='b', linewidth=0.2)
 
         for init_idx in range(n_inits):
-            plot_fixed_point(
-                ax,
-                xstar[init_idx:(init_idx+1)],
-                J_xstar[init_idx],
-                pca,
-                scale=mode_scale)
+            plot_fixed_point(ax, self[init_idx], pca, scale=mode_scale)
 
         plt.ion()
         plt.show()

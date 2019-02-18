@@ -249,12 +249,8 @@ class FixedPointFinder(object):
         # Optionally run additional optimization iterations on identified
         # fixed points with q values on the large side of the q-distribution.
         if self.do_rerun_outliers:
-            if self.pca is None:
-                unique_fps = self._run_additional_iterations_on_outliers(
-                    unique_fps)
-            else:
-                raise ValueError(
-                    'do_rerun_outliers is not yet supported with PCA')
+            unique_fps = self._run_additional_iterations_on_outliers(
+                unique_fps)
 
             # Filter out duplicates after from the second optimization round
             unique_fps = unique_fps.get_unique()
@@ -262,8 +258,11 @@ class FixedPointFinder(object):
         if self.do_compute_jacobians:
             self._print_if_verbose('\tComputing Jacobian at %d '
                                    'unique fixed points.' % unique_fps.n)
-            J_xstar = self._compute_multiple_jacobians_np(unique_fps)
+            J_xstar, e_vals, e_vecs = \
+                self._compute_multiple_jacobians_np(unique_fps)
             unique_fps.J_xstar = J_xstar
+            unique_fps.eigval_J_xstar = e_vals
+            unique_fps.eigvec_J_xstar = e_vecs
 
         self._print_if_verbose('\n\tFixed point finding complete.\n')
 
@@ -304,7 +303,7 @@ class FixedPointFinder(object):
 
         fps = FixedPoints(
             xstar=xstar,
-            x_init=tf_utils.maybe_convert_from_LSTMStateTuple(initial_states),
+            x_init=self._format_initial_state(initial_states),
             inputs=inputs,
             F_xstar=F_xstar,
             qstar=qstar,
@@ -349,6 +348,10 @@ class FixedPointFinder(object):
                                    'sequential optimizations...')
 
         n_inits, n_states = tf_utils.safe_shape(initial_states)
+
+        if self.pca is not None:
+            n_states = self.pca.n_components
+
         n_inputs = inputs.shape[1]
 
         # Allocate memory for storing results
@@ -451,8 +454,13 @@ class FixedPointFinder(object):
             outlier_fps = fps[idx_outliers]
             n_prev_iters = outlier_fps.n_iters
             inputs = outlier_fps.inputs
-            initial_states = self._get_rnncell_compatible_states(
-                outlier_fps.xstar)
+
+            if self.pca is None:
+                outlier_xstar = outlier_fps.xstar
+            else:
+                outlier_xstar = self.pca.inverse_transform(outlier_fps.xstar)
+
+            initial_states = self._get_rnncell_compatible_states(outlier_xstar)
 
             if method == 'joint':
 
@@ -691,7 +699,7 @@ class FixedPointFinder(object):
 
         fp = FixedPoints(
             xstar=xstar,
-            x_init=tf_utils.maybe_convert_from_LSTMStateTuple(initial_state),
+            x_init=self._format_initial_state(initial_state),
             inputs=inputs,
             F_xstar=F_xstar,
             qstar=qstar,
@@ -873,7 +881,7 @@ class FixedPointFinder(object):
         iter_count = np.tile(iter_count, ev_q.shape)
         return ev_x, ev_F, ev_q, ev_dq, iter_count
 
-    def _compute_multiple_jacobians_np(self, fps):
+    def _compute_multiple_jacobians_np(self, fps, do_eigendecomp=True):
         '''Computes the Jacobian of the RNN state transition function.
 
         Args:
@@ -884,6 +892,14 @@ class FixedPointFinder(object):
             J_np: An [n x n_states x n_states] numpy array containing the
             Jacobian of the RNN state transition function at the states
             specified in fps, given the inputs in fps.
+
+            eval_J_np: [n x n_states] numpy array containing with
+            eval_J_np[i, :] containing the eigenvalues of J_np[i, :, :].
+            Only returned if do_eigendecomp == True (default).
+
+            evec_J_np: [n x n_states x n_states] numpy array containing with
+            evec_J_np[i, :, :] containing the eigenvectors of J_np[i, :, :].
+            Only returned if do_eigendecomp == True (default).
 
         '''
         inputs_np = fps.inputs
@@ -906,8 +922,37 @@ class FixedPointFinder(object):
 
         J_np = self.session.run(J_tf)
 
-        return J_np
+        if do_eigendecomp:
+            # Batch eigendecomposition
+            self._print_if_verbose('\tComputing Jacobian eigendecompositions.')
+            e_vals, e_vecs = np.linalg.eig(J_np)
+            return J_np, e_vals, e_vecs
+        else:
+            return J_np
 
     def _print_if_verbose(self, *args, **kwargs):
         if self.verbose:
             print(*args, **kwargs)
+
+    def _format_initial_state(self, initial_states):
+        ''' Converts RNN states to the appropriate representation for
+        storage in a FixedPoints objects.
+
+        --If the RNN is an LSTM, states in a FixedPoints object are not
+            LSTMStateTuples.
+        --If optimizing in a low-d (PCA) space, states are stored in the
+            reduced-dimensional representation.
+
+        Args:
+            initial_states: as described in find_fixed_points(...)
+
+        Returns:
+            x_init: [n x n_states] numpy array containing initial states. Here
+            n_states depends on whether fixed-point optimization is performed
+            in a low-d PCA space, and if not, it depends on whether the RNN is
+            an LSTM.
+        '''
+        x_init = tf_utils.maybe_convert_from_LSTMStateTuple(initial_states)
+        if self.pca is not None:
+            x_init = self.pca.transform(x_init)
+        return x_init
