@@ -287,7 +287,7 @@ class FixedPoints(object):
         return self[idx]
 
 
-    def decompose_Jacobians(self):
+    def decompose_Jacobians(self, do_batch=True):
         '''Adds the following fields to the FixedPoints object:
 
         eigval_J_xstar: [n x n_states] numpy array containing with
@@ -298,12 +298,25 @@ class FixedPoints(object):
         J_xstar[i, :, :].
         '''
 
-        # Batch eigendecomposition
-        print('Decomposing Jacobians.')
-        e_vals, e_vecs = np.linalg.eig(self.J_xstar)
+        if do_batch:
+            # Batch eigendecomposition
+            print('Decomposing Jacobians in a single batch.')
+            e_vals, e_vecs = np.linalg.eig(self.J_xstar)
 
-        self.eigval_J_xstar = e_vals
-        self.eigvec_J_xstar = e_vecs
+            self.eigval_J_xstar = e_vals
+            self.eigvec_J_xstar = e_vecs
+        else:
+            e_vals = []
+            e_vecs = []
+            for J in self.J_xstar:
+                e_vals_i, e_vecs_i = np.linalg.eig(J)
+                e_vals.append(np.expand_dims(e_vals_i, axis=0))
+                e_vecs.append(np.expand_dims(e_vecs_i, axis=0))
+
+            self.eigval_J_xstar = np.concatenate(e_vals, axis=0)
+            self.eigvec_J_xstar = np.concatenate(e_vecs, axis=0)
+
+            pdb.set_trace()
 
     def __setitem__(self, index, fps):
         '''Implements the assignment operator.
@@ -378,7 +391,6 @@ class FixedPoints(object):
         J_xstar = self._safe_index(self.J_xstar, index)
         eigval_J_xstar = self._safe_index(self.eigval_J_xstar, index)
         eigvec_J_xstar = self._safe_index(self.eigvec_J_xstar, index)
-
 
         dtype = self.dtype
         tol_unique = self.tol_unique
