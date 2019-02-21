@@ -10,12 +10,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import numpy as np
 from sklearn.decomposition import PCA
+from scipy.spatial.distance import pdist, squareform
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 import pdb
-import numpy as np
+
 import cPickle
 import tf_utils
 
@@ -234,14 +237,41 @@ class FixedPoints(object):
                 is retained.
         '''
 
-        def unique_rows(x, approx_tol):
+        def unique_rows_approx(X, approx_tol):
             # Quick and dirty. Can update using pdist if necessary
             d = int(np.round(np.max([0 -np.log10(approx_tol)])))
-            ux, idx = np.unique(x.round(decimals=d),
+            ux, idx = np.unique(X.round(decimals=d),
                                 axis=0,
                                 return_index=True)
-            return ux, idx
+            return idx
 
+        def unique_rows(X, q, tol):
+            # In development: replacement for unique_rows_approx.
+            # This adds the ability to retain, of a collection of nearly-
+            # identical fixed points, the one with the smallest q value.
+            #
+            # X is shape [n, n_states]
+
+            # Redundant distance matrix, shape [n,n]
+            D = squareform(pdist(X))
+
+            # Sorts in ascending order
+            idx_sorted = np.argsort(q)
+
+            # Start by keeping the single fp with the smallest q.
+            keep_idx_list = [idx_sorted[0],] # master list
+            keep_idx = np.array(keep_idx_list) # np copy of above for indexing
+
+            for idx in idx_sorted[1:]:
+                D[idx, idx] = np.inf # Ignore self distance
+
+                if np.all(D[idx, keep_idx] > tol):
+                    keep_idx_list.append(idx)
+                    keep_idx = np.array(keep_idx_list)
+
+            return keep_idx
+
+        # Redefine each state as concatenated [state, input]
         if self.xstar is not None:
             if self.inputs is not None:
                 data = np.concatenate((self.xstar, self.inputs), axis=1)
@@ -251,12 +281,32 @@ class FixedPoints(object):
             raise ValueError('Cannot find unique fixed points because '
                 'self.xstar is None.')
 
-        unique_data, idx = unique_rows(data, self.tol_unique)
+        # idx = unique_rows_approx(data, self.tol_unique)
+        idx = unique_rows(data, self.qstar, self.tol_unique)
 
         return self[idx]
 
+
+    def decompose_Jacobians(self):
+        '''Adds the following fields to the FixedPoints object:
+
+        eigval_J_xstar: [n x n_states] numpy array containing with
+        eigval_J_xstar[i, :] containing the eigenvalues of J_xstar[i, :, :].
+
+        eigvec_J_xstar: [n x n_states x n_states] numpy array containing with
+        eigvec_J_xstar[i, :, :] containing the eigenvectors of
+        J_xstar[i, :, :].
+        '''
+
+        # Batch eigendecomposition
+        print('Decomposing Jacobians.')
+        e_vals, e_vecs = np.linalg.eig(self.J_xstar)
+
+        self.eigval_J_xstar = e_vals
+        self.eigvec_J_xstar = e_vecs
+
     def __setitem__(self, index, fps):
-        '''Implements the assignment opperator.
+        '''Implements the assignment operator.
 
         All compatible data from fps are copied. This excludes tol_unique,
         dtype, n, n_states, and n_inputs, which retain their original values.
@@ -585,6 +635,7 @@ class FixedPoints(object):
 
             xstar = fp.xstar # shape [1, n_states]
             J = fp.J_xstar # shape [1, n_states, n_states]
+
             e_vals = fp.eigval_J_xstar # shape [1, n_states]
             e_vecs = fp.eigvec_J_xstar # shape [1, n_states, n_states]
             sorted_e_val_idx = np.argsort(np.abs(e_vals))
@@ -711,6 +762,7 @@ class FixedPoints(object):
                     z_idx = x_idx[plot_time_idx, :]
                 plot_123d(ax, z_idx, color='b', linewidth=0.2)
 
+        self.decompose_Jacobians()
         for init_idx in range(n_inits):
             plot_fixed_point(ax, self[init_idx], pca, scale=mode_scale)
 

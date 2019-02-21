@@ -258,13 +258,10 @@ class FixedPointFinder(object):
         if self.do_compute_jacobians:
             self._print_if_verbose('\tComputing Jacobian at %d '
                                    'unique fixed points.' % unique_fps.n)
-            J_xstar, e_vals, e_vecs = \
-                self._compute_multiple_jacobians_np(unique_fps)
+            J_xstar = self._compute_multiple_jacobians_np(unique_fps)
             unique_fps.J_xstar = J_xstar
-            unique_fps.eigval_J_xstar = e_vals
-            unique_fps.eigvec_J_xstar = e_vecs
 
-        self._print_if_verbose('\n\tFixed point finding complete.\n')
+        self._print_if_verbose('\tFixed point finding complete.')
 
         return unique_fps, all_fps
 
@@ -881,7 +878,7 @@ class FixedPointFinder(object):
         iter_count = np.tile(iter_count, ev_q.shape)
         return ev_x, ev_F, ev_q, ev_dq, iter_count
 
-    def _compute_multiple_jacobians_np(self, fps, do_eigendecomp=True):
+    def _compute_multiple_jacobians_np(self, fps):
         '''Computes the Jacobian of the RNN state transition function.
 
         Args:
@@ -892,15 +889,6 @@ class FixedPointFinder(object):
             J_np: An [n x n_states x n_states] numpy array containing the
             Jacobian of the RNN state transition function at the states
             specified in fps, given the inputs in fps.
-
-            eval_J_np: [n x n_states] numpy array containing with
-            eval_J_np[i, :] containing the eigenvalues of J_np[i, :, :].
-            Only returned if do_eigendecomp == True (default).
-
-            evec_J_np: [n x n_states x n_states] numpy array containing with
-            evec_J_np[i, :, :] containing the eigenvectors of J_np[i, :, :].
-            Only returned if do_eigendecomp == True (default).
-
         '''
         inputs_np = fps.inputs
 
@@ -922,13 +910,7 @@ class FixedPointFinder(object):
 
         J_np = self.session.run(J_tf)
 
-        if do_eigendecomp:
-            # Batch eigendecomposition
-            self._print_if_verbose('\tComputing Jacobian eigendecompositions.')
-            e_vals, e_vecs = np.linalg.eig(J_np)
-            return J_np, e_vals, e_vecs
-        else:
-            return J_np
+        return J_np
 
     def _print_if_verbose(self, *args, **kwargs):
         if self.verbose:
