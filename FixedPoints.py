@@ -316,8 +316,6 @@ class FixedPoints(object):
             self.eigval_J_xstar = np.concatenate(e_vals, axis=0)
             self.eigvec_J_xstar = np.concatenate(e_vecs, axis=0)
 
-            pdb.set_trace()
-
     def __setitem__(self, index, fps):
         '''Implements the assignment operator.
 
