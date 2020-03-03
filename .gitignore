@@ -6,3 +6,6 @@ events.out.tfevents*
 *.pkl
 *.pyc
 *.sublime-workspace
+*/fpf/*
+*/__pycache__/
+*/logs/*
