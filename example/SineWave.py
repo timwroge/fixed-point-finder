@@ -379,18 +379,18 @@ class SineWave(RecurrentWhisperer):
         n_time = data_hps['n_time']
         n_bits = data_hps['n_bits']
         p_flip = data_hps['p_flip']
-        max_freq = 20 
+        max_freq = 10
         min_freq = 7
 
         # Randomly generate unsigned input pulses
-        tonic_frequencies = self.rng.random_sample(
-            [n_bits])*max_freq + min_freq
+        tonic_frequencies = self.rng.random_integers(
+            1, 4, [n_bits])*max_freq + min_freq
 
         # Apply random signs to input pulses
         inputs = np.zeros([n_batch, n_time, n_bits])
 
         for bit in range(n_bits) :
-            inputs[:, :, bit] = tonic_frequencies[ bit]/max_freq
+            inputs[:, :, bit] = tonic_frequencies[ bit]/( max_freq+min_freq)
 
         # Allocate output
         output = np.zeros([n_batch, n_time, n_bits])

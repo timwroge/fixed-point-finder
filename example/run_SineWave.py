@@ -25,14 +25,14 @@ from plot_utils import plot_fps
 # ***************************************************************************
 
 # Hyperparameters for AdaptiveLearningRate
-alr_hps = {'initial_rate': 1.0, 'min_rate': 1e-5}
+alr_hps = {'initial_rate': 1.0, 'min_rate': 1e-6}
 
 # Hyperparameters for SineWave
 # See SineWave.py for detailed descriptions.
 hps = {
-    'rnn_type': 'lstm',
+    'rnn_type': 'gru',
     'n_hidden': 200,
-    'min_loss': 1e-4,
+    'min_loss': 1e-6,
     'log_dir': './logs/',
     'data_hps': {
         'n_batch': 512,
