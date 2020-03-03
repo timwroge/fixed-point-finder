@@ -13,6 +13,9 @@ import numpy as np
 import time
 from copy import deepcopy
 import tensorflow as tf
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 from tensorflow.python.ops import parallel_for as pfor
 import absl
 import pdb
@@ -228,6 +231,7 @@ class FixedPointFinder(object):
         self.max_n_unique = max_n_unique
         self.do_compute_jacobians = do_compute_jacobians
         self.do_decompose_jacobians = do_decompose_jacobians
+        self.has_decomposed_jacobians = False
         self.verbose = verbose
         self.super_verbose = super_verbose
         self.n_iters_per_print_update = n_iters_per_print_update

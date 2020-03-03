@@ -14,6 +14,8 @@ import numpy as np
 import pdb
 
 from sklearn.decomposition import PCA
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -211,7 +213,7 @@ def plot_fixed_point(ax, fp, pca,
 			''' Ideally, never wind up here. Eigen decomposition is much faster in batch mode.'''
 			print('Decomposing Jacobians, one fixed point at time.')
 			print('\t warning: THIS CAN BE VERY SLOW.')
-			fp.decompose_Jacobians()
+			fp.decompose_jacobians()
 
 		e_vals = fp.eigval_J_xstar[0]
 		e_vecs = fp.eigvec_J_xstar[0]

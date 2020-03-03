@@ -12,7 +12,7 @@ from __future__ import print_function
 
 import pdb
 import numpy as np
-import cPickle
+import pickle as cPickle
 
 class FixedPoints(object):
     '''
@@ -144,6 +144,7 @@ class FixedPoints(object):
         self.tol_unique = tol_unique
         self.dtype = dtype
         self.verbose = verbose
+        self.has_decomposed_jacobians = False
 
         if do_alloc_nan:
             if n is None:
@@ -171,7 +172,6 @@ class FixedPoints(object):
 
             self.eigval_J_xstar = self._alloc_nan((n, n_states))
             self.eigvec_J_xstar = self._alloc_nan((n, n_states, n_states))
-            self.has_decomposed_jacobians = False
 
         else:
             if xstar is not None:
@@ -475,6 +475,10 @@ class FixedPoints(object):
         dq = self._safe_index(self.dq, index)
         n_iters = self._safe_index(self.n_iters, index)
         J_xstar = self._safe_index(self.J_xstar, index)
+
+        print( "__ adding hack, no decomposed jacobians " )
+        self.has_decomposed_jacobians = False
+        # this is the end of what was added
 
         if self.has_decomposed_jacobians:
             eigval_J_xstar = self._safe_index(self.eigval_J_xstar, index)
