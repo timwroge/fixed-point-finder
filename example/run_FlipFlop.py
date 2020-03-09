@@ -2,7 +2,8 @@
 run_flipflop.py
 Written using Python 2.7.12
 @ Matt Golub, October 2018.
-Please direct correspondence to mgolub@stanford.edu.
+@ Modified by Tim Wroge, March 2020
+Please direct correspondence to timothy.wroge@pitt.edu
 '''
 
 from __future__ import absolute_import
