@@ -171,6 +171,12 @@ class SineWave(RecurrentWhisperer):
                 '[vanilla, gru, lstm] but was %s' % hps.rnn_type)
 
         initial_state = self.rnn_cell.zero_state(n_batch, dtype=tf.float32)
+        #self.hidden_bxtxd, _ = tf.nn.dynamic_rnn(self.rnn_cell,
+        #    self.inputs_bxtxd, initial_state=initial_state)
+
+
+        # Readout from RNN
+
         self.hidden_bxtxd, _ = tf.nn.dynamic_rnn(self.rnn_cell,
             self.inputs_bxtxd, initial_state=initial_state)
 
@@ -180,10 +186,17 @@ class SineWave(RecurrentWhisperer):
         self.b_out = tf.Variable(np_b_out, dtype=tf.float32)
         self.pred_output_bxtxd = tf.tensordot(self.hidden_bxtxd,
             self.W_out, axes=1) + self.b_out
-
-        # Loss
         self.loss = tf.reduce_mean(
             tf.squared_difference(self.output_bxtxd, self.pred_output_bxtxd))
+        #X = tf.placeholder(tf.float32, [None, n_steps, n_inputs])
+        #y = tf.placeholder(tf.float32, [None, n_steps, n_outputs])
+        #cell = tf.contrib.rnn.OutputProjectionWrapper(
+        #tf.contrib.rnn.BasicRNNCell(num_units=n_neurons, activation=tf.nn.relu),
+        #    output_size=n_outputs)
+        #outputs, states = tf.nn.dynamic_rnn(cell, X, dtype=tf.float32)
+        #loss = tf.reduce_mean(tf.square(outputs - y))
+        #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        #training_op = optimizer.minimize(loss)
 
     def _setup_training(self, train_data, valid_data):
         '''Does nothing. Required by RecurrentWhisperer.'''
@@ -280,8 +293,11 @@ class SineWave(RecurrentWhisperer):
             return self._predict_with_LSTM_cell_states(batch_data)
         else:
             ops_to_eval = [self.hidden_bxtxd, self.pred_output_bxtxd]
+            #ops_to_eval = [self.pred_output_bxtxd]
             feed_dict = {self.inputs_bxtxd: batch_data['inputs']}
             ev_hidden_bxtxd, ev_pred_output_bxtxd = \
+                self.session.run(ops_to_eval, feed_dict=feed_dict)
+            ev_pred_output_bxtxd = \
                 self.session.run(ops_to_eval, feed_dict=feed_dict)
 
             predictions = {
@@ -379,18 +395,19 @@ class SineWave(RecurrentWhisperer):
         n_time = data_hps['n_time']
         n_bits = data_hps['n_bits']
         p_flip = data_hps['p_flip']
-        max_freq = 10
+        max_freq = 20
         min_freq = 7
+        self.rng.seed(7);
+        self.max_samples = 71
+
+        tonic_frequencies_samples = np.linspace(0, 1, self.max_samples)
 
         # Randomly generate unsigned input pulses
-        tonic_frequencies = self.rng.random_integers(
-            1, 4, [n_bits])*max_freq + min_freq
-
-        # Apply random signs to input pulses
         inputs = np.zeros([n_batch, n_time, n_bits])
 
-        for bit in range(n_bits) :
-            inputs[:, :, bit] = tonic_frequencies[ bit]/( max_freq+min_freq)
+        for bit in range(n_bits):
+            for batch in range(n_batch):
+                inputs[batch, :, bit] = self.rng.choice(tonic_frequencies_samples)
 
         # Allocate output
         output = np.zeros([n_batch, n_time, n_bits])
@@ -398,7 +415,8 @@ class SineWave(RecurrentWhisperer):
         # Update inputs (zero-out random start holds) & compute output
         for trial_idx in range(n_batch):
             for bit_idx in range(n_bits):
-                frequency = tonic_frequencies[bit_idx]
+                sample = inputs[trial_idx, 0, bit_idx]
+                frequency = sample *max_freq +min_freq
                 times = np.linspace(0, frequency, n_time)
                 output[trial_idx, :, bit_idx] = \
                         self._sine(times)
@@ -434,7 +452,7 @@ class SineWave(RecurrentWhisperer):
         '''
 
         FIG_WIDTH = 6 # inches
-        FIG_HEIGHT = 3 # inches
+        FIG_HEIGHT = 13 # inches
 
         fig = self._get_fig('example_trials',
             width=FIG_WIDTH,
@@ -448,7 +466,7 @@ class SineWave(RecurrentWhisperer):
         inputs = data['inputs']
         output = data['output']
         predictions = self.predict(data)
-        pred_output = predictions['output']
+        pred_output = predictions['output'][0]
 
         if stop_time is None:
             stop_time = n_time
