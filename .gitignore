@@ -9,4 +9,4 @@ events.out.tfevents*
 */fpf/*
 */__pycache__/
 */logs/*
-*/src/recurrent-whisperer/*
+*/src/recurrent-whisperer//*
