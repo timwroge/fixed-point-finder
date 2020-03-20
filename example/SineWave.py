@@ -178,7 +178,7 @@ class SineWave(RecurrentWhisperer):
 
 
         # Readout from RNN
-        cell = tf.contrib.rnn.OutputProjectionWrapper(self.rnn_cell,  output_size=n_time)
+        cell = tf.contrib.rnn.OutputProjectionWrapper(self.rnn_cell,  output_size=n_output)
 
         self.pred_output_bxtxd, self.hidden_bxtxd  = tf.nn.dynamic_rnn(cell,
             self.inputs_bxtxd, initial_state=initial_state)
@@ -189,7 +189,7 @@ class SineWave(RecurrentWhisperer):
         # Readout from RNN
         self.loss = tf.reduce_mean(
             tf.squared_difference(self.output_bxtxd, self.pred_output_bxtxd))
-        ######################## 
+        ########################
         #X = tf.placeholder(tf.float32, [None, n_steps, n_inputs])
         #y = tf.placeholder(tf.float32, [None, n_steps, n_outputs])
         #cell = tf.contrib.rnn.OutputProjectionWrapper(
@@ -295,18 +295,26 @@ class SineWave(RecurrentWhisperer):
         if do_predict_full_LSTM_state:
             return self._predict_with_LSTM_cell_states(batch_data)
         else:
-            #ops_to_eval = [self.hidden_bxtxd, self.pred_output_bxtxd]
+            #ops_to_eval = [ self.pred_output_bxtxd, self.hidden_bxtxd]
             ops_to_eval = [self.pred_output_bxtxd]
             feed_dict = {self.inputs_bxtxd: batch_data['inputs']}
             #ev_hidden_bxtxd, ev_pred_output_bxtxd = \
             #    self.session.run(ops_to_eval, feed_dict=feed_dict)
             ev_pred_output_bxtxd = \
                 self.session.run(ops_to_eval, feed_dict=feed_dict)
+            # get hidden
+            ops_to_eval = [self.hidden_bxtxd]
+            feed_dict = {self.inputs_bxtxd: batch_data['inputs']}
+            #ev_hidden_bxtxd, ev_pred_output_bxtxd = \
+            #    self.session.run(ops_to_eval, feed_dict=feed_dict)
+            ev_hidden_bxtxd = \
+                self.session.run(ops_to_eval, feed_dict=feed_dict)
 
             predictions = {
-                #'state': ev_hidden_bxtxd,
+                'state': ev_hidden_bxtxd[0] ,
                 'output': ev_pred_output_bxtxd
                 }
+            print_status("Hidden size: {} ".format(  np.array(ev_pred_output_bxtxd)[0] .shape ) )
 
             return predictions
 
