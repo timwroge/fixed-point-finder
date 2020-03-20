@@ -1,4 +1,5 @@
 from Utils import print_status
+import tensorflow as tf
 class GridSearch(object):
     def __init__(self, model_class, hyperparameters):
         '''The model is the callable that takes the hyper paramters  '''
@@ -17,6 +18,8 @@ class GridSearch(object):
                     "index" :  0,
                     "length": len(self.hyperparameters[key])}
         self.is_first = True
+        self.update_index = [0]*len(self.param_set)
+        self.is_done = False
 
     def test_model_for_methods(self, model):
         '''This tests the model for the methods that are called during'''
@@ -25,10 +28,6 @@ class GridSearch(object):
             print_status(  "Testing model for method attributes" )
             method = 'train'
             assert hasattr(model, method)
-            method = 'plot_trials'
-            assert hasattr(model, method)
-            method = 'predict'
-            assert hasattr(model, method)
             method = '__init__'
             assert hasattr(model, method)
             print_status(  "The model succeeded model method tests" )
@@ -36,6 +35,22 @@ class GridSearch(object):
             raise Exception("The model that was passed in does not have the method: ", method)
     def generate_model(self, hyperparameters):
         return self.model_class(**hyperparameters)
+    def print_key_indexes(self):
+        indexes = [0] *  len(self.param_set)
+        lengths = [0] *  len(self.param_set)
+        params = [0] *  len(self.param_set)
+        index = 0
+        for param in self.param_set:
+            #if any of them are not at their last index
+            length = self.param_set[param]["length"]
+            _index = self.param_set[param]["index"]
+            indexes[index] = _index
+            lengths[index] = length
+            params[index] = param
+            index +=1
+        print("params: {}\n indexes: {}\nlengths: {}  ".format(params, indexes, lengths)  )
+
+
     def get_params(self):
         params = {}
         for param in self.param_set:
@@ -44,24 +59,30 @@ class GridSearch(object):
             params[param]  = params_array[params_index]
         return params
 
-
     def get_next_param_set(self):
         if (self.is_first):
             self.is_first = False
             return self.get_params()
         else:
+            # increment the indexes for all
+            update_next = True
             for param in self.param_set:
-                #if any of them are not at their last index
-                if param["index"] < param["length"]-1:
+                if(update_next) :
                     self.param_set[param]["index"] += 1
-                    break
+                    update_next  = False
+
+                #if any of them are not at their last index
+                if self.param_set[param]["index"] > self.param_set[param]["length"]-1:
+                    self.param_set[param]["index"] = 0
+                    update_next = True
+            if(update_next):
+                self.is_done = True
             #update the model params
             return self.get_params()
 
     def has_next_param_set(self):
         for param in self.param_set:
-            #if any of them are not at their last index
-            if self.param_set[param] [ "index"] < self.param_set[param]["length"]-1:
+            if self.param_set[param]["index"] < self.param_set[param]["length"]-1:
                 return True
         return False
 
@@ -76,6 +97,11 @@ class GridSearch(object):
             params = self.get_next_param_set()
             self.print_model_params(params)
             model = self.generate_model(params)
+            del params
+            print_status("Training model now")
             model.train()
-            model.plot_trials()
-
+            print_status("Done training model")
+            print_status("Closing Session")
+            tf.reset_default_graph()
+            print_status("Session closed")
+            del model
