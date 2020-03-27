@@ -309,12 +309,13 @@ class SineWave(RecurrentWhisperer):
             #    self.session.run(ops_to_eval, feed_dict=feed_dict)
             ev_hidden_bxtxd = \
                 self.session.run(ops_to_eval, feed_dict=feed_dict)
+            ev_hidden_bxtxd = ev_hidden_bxtxd[0]
 
             predictions = {
-                'state': ev_hidden_bxtxd[0] ,
+                'state': ev_hidden_bxtxd,
                 'output': ev_pred_output_bxtxd
                 }
-            print_status("Hidden size: {} ".format(  np.array(ev_pred_output_bxtxd)[0] .shape ) )
+            print_status("Hidden size: {} ".format(  np.array(ev_pred_output_bxtxd) .shape ) )
 
             return predictions
 
