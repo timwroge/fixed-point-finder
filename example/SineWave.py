@@ -160,46 +160,26 @@ class SineWave(RecurrentWhisperer):
         self.output_bxtxd = tf.placeholder(tf.float32,
             [n_batch, n_time, n_output])
 
-        # RNN
-        #if hps.rnn_type == 'vanilla':
         self.rnn_cell = tf.nn.rnn_cell.BasicRNNCell(n_hidden)
-        #elif hps.rnn_type == 'gru':
-        #    self.rnn_cell = tf.nn.rnn_cell.GRUCell(n_hidden)
-        #elif hps.rnn_type == 'lstm':
-        #    self.rnn_cell = tf.nn.rnn_cell.LSTMCell(n_hidden)
-        #else:
-        #    raise ValueError('Hyperparameter rnn_type must be one of '
-        #        '[vanilla, gru, lstm] but was %s' % hps.rnn_type)
-
-        #self.rnn_cell = tf.contrib.rnn.OutputProjectionWrapper(self.rnn_cell,  output_size=n_output)
-        #self.hidden_bxtxd, _ = tf.nn.dynamic_rnn(self.rnn_cell,
-        #    self.inputs_bxtxd, initial_state=initial_state)
         initial_state = self.rnn_cell.zero_state(n_batch, dtype=tf.float32)
 
 
         # Readout from RNN
-        cell = tf.contrib.rnn.OutputProjectionWrapper(self.rnn_cell,  output_size=n_output)
+        #cell = tf.contrib.rnn.OutputProjectionWrapper(self.rnn_cell,  output_size=n_output)
 
-        self.pred_output_bxtxd, self.hidden_bxtxd  = tf.nn.dynamic_rnn(cell,
+        self.hidden_bxtxd,  _ = tf.nn.dynamic_rnn(self.rnn_cell,
             self.inputs_bxtxd, initial_state=initial_state)
-        #self.pred_output_bxtxd, self.hidden_bxtxd  = tf.nn.dynamic_rnn(cell,
-        #    self.inputs_bxtxd)
-        #print(self.hidden_bxtxd.shape )
+        ####
+        np_W_out, np_b_out = self._np_init_weight_matrix(n_hidden, n_output)
+        self.W_out = tf.constant(np_W_out, dtype=tf.float32)
+        self.b_out = tf.constant(np_b_out, dtype=tf.float32)
+        self.pred_output_bxtxd = tf.tensordot(self.hidden_bxtxd,
+            self.W_out, axes=1) + self.b_out
+        ####
 
         # Readout from RNN
         self.loss = tf.reduce_mean(
             tf.squared_difference(self.output_bxtxd, self.pred_output_bxtxd))
-        ########################
-        #X = tf.placeholder(tf.float32, [None, n_steps, n_inputs])
-        #y = tf.placeholder(tf.float32, [None, n_steps, n_outputs])
-        #cell = tf.contrib.rnn.OutputProjectionWrapper(
-        #tf.contrib.rnn.BasicRNNCell(num_units=n_neurons, activation=tf.nn.relu),
-        #output_size=n_outputs)
-        #outputs, states = tf.nn.dynamic_rnn(cell, X, dtype=tf.float32)
-        #loss = tf.reduce_mean(tf.square(outputs - y))
-        #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        #training_op = optimizer.minimize(loss)
-        ######################## 
 
     def _setup_training(self, train_data, valid_data):
         '''Does nothing. Required by RecurrentWhisperer.'''
