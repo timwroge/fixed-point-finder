@@ -101,7 +101,7 @@ class GridSearch(object):
 
     def show_fixed_points(self, ff):
         NOISE_SCALE = 0.5 # Standard deviation of noise added to initial states
-        N_INITS = 1024 # The number of initial states to provide
+        N_INITS = 2048 # The number of initial states to provide
 
         n_bits = ff.hps.data_hps['n_bits']
         is_lstm = ff.hps.rnn_type == 'lstm'
