@@ -16,6 +16,7 @@ import numpy as np
 from numpy import sin as sine
 from Utils import print_status
 from time import sleep
+from random import randrange as rand
 
 if os.environ.get('DISPLAY','') == '':
     # Ensures smooth running across environments, including servers without
@@ -408,17 +409,19 @@ class CenterOut(RecurrentWhisperer):
             raise Exception("The number of dimensions must be 2 for x and y components of the center out task" )
         sqrt_2 = ( 2 ** (1/2.0) ) / 2.0
 
-        x_and_y_options = [(1, 0),(sqrt_2, sqrt_2), (0, 1),  (-sqrt_2, sqrt_2), (-1, 0), (-sqrt_2, -sqrt_2), (0, -1), (sqrt_2, -sqrt_2)]
+        x_and_y_options = [ (0.0, 1), (sqrt_2, sqrt_2), (-sqrt_2, sqrt_2),(sqrt_2, -sqrt_2),(-sqrt_2, -sqrt_2),(0, -1),  (-1, 0),  (1, 0)]
 
         # Randomly generate unsigned input pulses
         inputs = np.zeros([n_batch, n_time, n_bits])
         outputs = np.zeros([n_batch, n_time, n_bits])
         when_trial_begins = int( n_time/4)
         when_trial_ends = int( n_time - n_time/4)
+        conditions = [] 
 
         for batch in range(n_batch):
             #pick a random number for the x dimension
             choice  = self.rng.choice(8)
+            conditions.append(choice)
             (x_component, y_component)  = x_and_y_options[choice]
 
             inputs[batch, when_trial_begins:, 0] = x_component
@@ -426,7 +429,7 @@ class CenterOut(RecurrentWhisperer):
             outputs[batch, when_trial_begins:, 0] = x_component
             outputs[batch, when_trial_begins:, 1] = y_component
 
-        return {'inputs': inputs, 'output': outputs}
+        return {'inputs': inputs, 'output': outputs, 'condition': conditions}
 
     def update_visualizations(self,
         train_data=None,
@@ -437,8 +440,9 @@ class CenterOut(RecurrentWhisperer):
         self.plot_trials(data)
         self.refresh_figs()
 
-    def _sine(self, time):
-        return sine(np.array(time));
+    def trial_input_to_color(self, condition):
+        colors = [ 'cyan', 'deepskyblue', 'darkblue', 'y', 'r', 'orange', 'm', 'g' ]
+        return colors[condition]
 
     def plot_trials(self, data, start_time=0, stop_time=None):
         '''Plots example trials, complete with input pulses, correct outputs,
@@ -471,6 +475,7 @@ class CenterOut(RecurrentWhisperer):
 
         inputs = data['inputs']
         output = data['output']
+        conditions = data['condition']
         predictions = self.predict(data)
         pred_output = np.array( predictions['output'][0])
 
@@ -482,35 +487,34 @@ class CenterOut(RecurrentWhisperer):
         for trial_idx in range(1, n_plot+1):
             ax = fig.add_subplot(n_plot, 1, trial_idx)
             if n_plot == 1:
-                plt.title('Example trial', fontweight='bold')
+                ax.set_title('Example trial', fontweight='bold')
             else:
-                plt.title('Example trial %d' % (trial_idx ),
-                          fontweight='bold')
+                ax.set_title('Example trial %d' % (trial_idx), fontweight='bold')
 
             self._plot_single_trial(
                 inputs[trial_idx, time_idx, :],
                 output[trial_idx, time_idx, :],
-                pred_output[trial_idx, time_idx, :])
+                pred_output[trial_idx, time_idx, :], ax)
 
             if trial_idx < (n_plot-1):
-                plt.xticks([])
+                ax.set_xticks([])
             else:
-                plt.xlabel('Timestep', fontweight='bold')
+                ax.set_xlabel('Timestep', fontweight='bold')
         # print out the center out trials
         fig2 = self._get_fig('center_out',
             no_fixed_size=True)
 
-        #plt.figure()
         sq = 2**(1/2.0) /2.0
         #<my_trial>
-        #plt.subplots(sharex=True)
-        n_center_out = 2
+        n_center_out = 1
         for trial_idx in range(1, n_center_out+1):
             ax = fig2.add_subplot(n_center_out, 1, trial_idx)
+            #plt.subplots(sharex=True)
             # points counter clockwise around the circle
             xs = [1, sq, 0, -sq, -1, -sq,  0,  sq]
             ys = [0, sq, 1,  sq,  0, -sq, -1, -sq]
-            plt.scatter(xs, ys, color='white' )
+            #make sure the scale is correct
+            ax.scatter(xs, ys, color='white' )
             ax.set(adjustable='box-forced', aspect='equal')
             circle_c = plt.Circle((0, 0), 0.05, color='gray')
             circle_0 = plt.Circle((0.0, 1), 0.05, color='cyan')
@@ -533,39 +537,43 @@ class CenterOut(RecurrentWhisperer):
             ax.add_artist(circle_7)
             ax.add_artist(circle_7)
 
-            #print(output[trial_idx, time_idx, :])
-            xs, ys = output[trial_idx, time_idx, :][0]
-            plt.scatter(
-                xs, ys, color = 'm'
-                )
+            print(pred_output.shape)
+            #current_trial = pred_output[trial_idx, :, :]
+            for reach in range(min(64, n_batch)):
+                current_trial = pred_output[reach, :, :]
+                xs = current_trial[:, 0]
+                ys = current_trial[:, 1]
 
-    def trial_input_to_color(self, trial):
-        length = len(trial)
-        # go to center of trial
-        index = length//2
-        values = int( trial[index, index])
-        return 'g'
+                ax.plot(
+                        xs, ys, 0.3, color = self.trial_input_to_color(conditions[reach]  )
+                    )
+                ax.scatter(
+                    xs, ys, 0.5, color = 'black'
+                    )
+
 
 
 
     @staticmethod
-    def _plot_single_trial(input_txd, output_txd, pred_output_txd):
+    def _plot_single_trial(input_txd, output_txd, pred_output_txd, ax):
 
         VERTICAL_SPACING = 2.5
         [n_time, n_bits] = input_txd.shape
         tt = range(n_time)
 
         y_ticks = [VERTICAL_SPACING*bit_idx for bit_idx in range(n_bits)]
-        y_tick_labels = \
-            ['Bit %d' % (n_bits-bit_idx) for bit_idx in range(n_bits)]
+        #y_tick_labels = \
+        #    ['Bit %d' % (n_bits-bit_idx) for bit_idx in range(n_bits)]
+        y_tick_labels = 'Y    X'
 
-        plt.yticks(y_ticks, y_tick_labels, fontweight='bold')
+        ax.set_yticks(y_ticks)
+        ax.set_ylabel(y_tick_labels, fontweight='bold')
         for bit_idx in range(n_bits):
 
             vertical_offset = VERTICAL_SPACING*bit_idx
 
             # Input pulses
-            plt.fill_between(
+            ax.fill_between(
                 tt,
                 vertical_offset + input_txd[:, bit_idx],
                 vertical_offset,
@@ -573,7 +581,7 @@ class CenterOut(RecurrentWhisperer):
                 color='gray')
 
             # Correct outputs
-            plt.step(
+            ax.step(
                 tt,
                 vertical_offset + output_txd[:, bit_idx],
                 where='mid',
@@ -581,7 +589,7 @@ class CenterOut(RecurrentWhisperer):
                 color='cyan')
 
             # RNN outputs
-            plt.step(
+            ax.step(
                 tt,
                 vertical_offset + pred_output_txd[:, bit_idx],
                 where='mid',
@@ -589,4 +597,4 @@ class CenterOut(RecurrentWhisperer):
                 linewidth=1.5,
                 linestyle='--')
 
-        plt.xlim(-1, n_time)
+        ax.set_xlim(-1, n_time)

@@ -29,7 +29,7 @@ alr_hps = {'initial_rate': 0.0001, 'min_rate': 1e-5}
 
 hps = {
     'rnn_type': 'vanilla',
-    'n_hidden': 180,
+    'n_hidden': 200, 
     'min_loss': 1e-4,
     'noise_type': 0,
     'noise_std': .02,
