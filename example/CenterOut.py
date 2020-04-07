@@ -15,6 +15,7 @@ import tensorflow as tf
 import numpy as np
 from numpy import sin as sine
 from Utils import print_status
+from time import sleep
 
 if os.environ.get('DISPLAY','') == '':
     # Ensures smooth running across environments, including servers without
@@ -108,6 +109,7 @@ class CenterOut(RecurrentWhisperer):
             'rnn_type': 'vanilla',
             'n_hidden': 24,
             'noise_type': 0,
+            'noise_std': 0.1,
             'data_hps': {
                 'n_batch': 128,
                 'n_time': 256,
@@ -170,16 +172,22 @@ class CenterOut(RecurrentWhisperer):
 
         hidden_activity,  _ = tf.nn.dynamic_rnn(self.rnn_cell,
             self.inputs_bxtxd, initial_state=initial_state)
-        if(self.noise_type):
-            self.hidden_bxtxd = hidden_activity + tf.random.normal( tf.shape(self.hidden_bxtxd), mean=0.0, stddev=0.5, dtype=tf.dtypes.float32, seed=None, name=None)
+        if(self.hps.noise_type):
+            noise = tf.random.normal( tf.shape(hidden_activity), mean=0.0, stddev=hps.noise_std, dtype=tf.dtypes.float32, seed=None, name=None)
+            self.hidden_bxtxd = hidden_activity +noise
         else:
             self.hidden_bxtxd = hidden_activity
 
         np_W_out, np_b_out = self._np_init_weight_matrix(n_hidden, n_output)
         self.W_out = tf.constant(np_W_out, dtype=tf.float32)
         self.b_out = tf.constant(np_b_out, dtype=tf.float32)
-        self.pred_output_bxtxd = tf.tensordot(self.hidden_bxtxd,
+        temp_output = tf.tensordot(self.hidden_bxtxd,
             self.W_out, axes=1) + self.b_out
+        if(self.hps.noise_type):
+            self.pred_output_bxtxd = temp_output
+        else:
+            noise = tf.random.normal( tf.shape(temp_output), mean=0.0, stddev=hps.noise_std, dtype=tf.dtypes.float32, seed=None, name=None)
+            self.pred_output_bxtxd =  temp_output + noise
 
         # Readout from RNN
         self.loss = tf.reduce_mean(
@@ -413,10 +421,10 @@ class CenterOut(RecurrentWhisperer):
             choice  = self.rng.choice(8)
             (x_component, y_component)  = x_and_y_options[choice]
 
-            inputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
-            inputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
-            outputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
-            outputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
+            inputs[batch, when_trial_begins:, 0] = x_component
+            inputs[batch, when_trial_begins:, 1] = y_component
+            outputs[batch, when_trial_begins:, 0] = x_component
+            outputs[batch, when_trial_begins:, 1] = y_component
 
         return {'inputs': inputs, 'output': outputs}
 
@@ -428,6 +436,7 @@ class CenterOut(RecurrentWhisperer):
         data = self.generate_trials()
         self.plot_trials(data)
         self.refresh_figs()
+
     def _sine(self, time):
         return sine(np.array(time));
 
@@ -464,20 +473,18 @@ class CenterOut(RecurrentWhisperer):
         output = data['output']
         predictions = self.predict(data)
         pred_output = np.array( predictions['output'][0])
-        print_status("THE SHAPE {} ".format(pred_output.shape)  )
-        #pred_output = pred_output.reshape( (pred_output.shape[0], pred_output.shape[1], 1  ) ) 
 
         if stop_time is None:
             stop_time = n_time
 
         time_idx = range(start_time, stop_time)
 
-        for trial_idx in range(n_plot):
-            ax = plt.subplot(n_plot, 1, trial_idx+1)
+        for trial_idx in range(1, n_plot+1):
+            ax = fig.add_subplot(n_plot, 1, trial_idx)
             if n_plot == 1:
                 plt.title('Example trial', fontweight='bold')
             else:
-                plt.title('Example trial %d' % (trial_idx + 1),
+                plt.title('Example trial %d' % (trial_idx ),
                           fontweight='bold')
 
             self._plot_single_trial(
@@ -485,11 +492,61 @@ class CenterOut(RecurrentWhisperer):
                 output[trial_idx, time_idx, :],
                 pred_output[trial_idx, time_idx, :])
 
-            # Only plot x-axis ticks and labels on the bottom subplot
             if trial_idx < (n_plot-1):
                 plt.xticks([])
             else:
                 plt.xlabel('Timestep', fontweight='bold')
+        # print out the center out trials
+        fig2 = self._get_fig('center_out',
+            no_fixed_size=True)
+
+        #plt.figure()
+        sq = 2**(1/2.0) /2.0
+        #<my_trial>
+        #plt.subplots(sharex=True)
+        n_center_out = 2
+        for trial_idx in range(1, n_center_out+1):
+            ax = fig2.add_subplot(n_center_out, 1, trial_idx)
+            # points counter clockwise around the circle
+            xs = [1, sq, 0, -sq, -1, -sq,  0,  sq]
+            ys = [0, sq, 1,  sq,  0, -sq, -1, -sq]
+            plt.scatter(xs, ys, color='white' )
+            ax.set(adjustable='box-forced', aspect='equal')
+            circle_c = plt.Circle((0, 0), 0.05, color='gray')
+            circle_0 = plt.Circle((0.0, 1), 0.05, color='cyan')
+            circle_1 = plt.Circle((sq, sq), 0.05, color='deepskyblue')
+            circle_2 = plt.Circle((-sq, sq), 0.05, color='darkblue')
+            circle_3 = plt.Circle((sq, -sq), 0.05, color='y')
+            circle_4 = plt.Circle((-sq, -sq), 0.05, color='r')
+            circle_5 = plt.Circle((0, -1), 0.05, color='orange')
+            circle_6 = plt.Circle((-1, 0), 0.05, color='m')
+            circle_7 = plt.Circle(( 1, 0), 0.05, color='g')
+
+            ax.add_artist(circle_c)
+            ax.add_artist(circle_0)
+            ax.add_artist(circle_1)
+            ax.add_artist(circle_2)
+            ax.add_artist(circle_3)
+            ax.add_artist(circle_4)
+            ax.add_artist(circle_5)
+            ax.add_artist(circle_6)
+            ax.add_artist(circle_7)
+            ax.add_artist(circle_7)
+
+            #print(output[trial_idx, time_idx, :])
+            xs, ys = output[trial_idx, time_idx, :][0]
+            plt.scatter(
+                xs, ys, color = 'm'
+                )
+
+    def trial_input_to_color(self, trial):
+        length = len(trial)
+        # go to center of trial
+        index = length//2
+        values = int( trial[index, index])
+        return 'g'
+
+
 
     @staticmethod
     def _plot_single_trial(input_txd, output_txd, pred_output_txd):

@@ -31,7 +31,8 @@ hps = {
     'rnn_type': 'vanilla',
     'n_hidden': 180,
     'min_loss': 1e-4,
-    'noise_type':1,
+    'noise_type': 0,
+    'noise_std': .02,
     'log_dir': './logs_center_out/',
     'data_hps': {
         'n_batch': 512,
