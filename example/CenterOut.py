@@ -377,7 +377,7 @@ class CenterOut(RecurrentWhisperer):
         '''See docstring in RecurrentWhisperer.'''
         return batch_data['inputs'].shape[0]
 
-    def generate_trials(self):
+    def generate_trials(self, return_to_center=False):
         '''Generates synthetic data (i.e., ground truth trials) for the
         SineWave task. See comments following FlipFlop class definition for a
         description of the input-output relationship in the task.
@@ -416,18 +416,23 @@ class CenterOut(RecurrentWhisperer):
         outputs = np.zeros([n_batch, n_time, n_bits])
         when_trial_begins = int( n_time/4)
         when_trial_ends = int( n_time - n_time/4)
-        conditions = [] 
+        conditions = []
 
         for batch in range(n_batch):
             #pick a random number for the x dimension
             choice  = self.rng.choice(8)
             conditions.append(choice)
             (x_component, y_component)  = x_and_y_options[choice]
-
-            inputs[batch, when_trial_begins:, 0] = x_component
-            inputs[batch, when_trial_begins:, 1] = y_component
-            outputs[batch, when_trial_begins:, 0] = x_component
-            outputs[batch, when_trial_begins:, 1] = y_component
+            if return_to_center:
+                inputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
+                inputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
+                outputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
+                outputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
+            else:
+                inputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
+                inputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
+                outputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
+                outputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
 
         return {'inputs': inputs, 'output': outputs, 'condition': conditions}
 

@@ -27,6 +27,7 @@ def plot_fps(fps,
     plot_start_time=0,
     plot_stop_time=None,
     mode_scale=0.25,
+    conditions=None,
     fig=None):
 
     '''Plots a visualization and analysis of the unique fixed points.
@@ -148,14 +149,19 @@ def plot_fps(fps,
                 z_idx = pca.transform(x_idx[plot_time_idx, :])
             else:
                 z_idx = x_idx[plot_time_idx, :]
-            plot_123d(ax, z_idx, color='b', linewidth=0.2)
+            if conditions == None:
+                plot_123d(ax, z_idx, color='b', linewidth=0.2)
+            else:
+                colors = [ 'cyan', 'deepskyblue', 'darkblue', 'y', 'r', 'orange', 'm', 'g' ]
+                color = colors[ conditions[batch_idx]]
+                plot_123d(ax, z_idx, color=color, linewidth=0.2)
 
     for init_idx in range(n_inits):
         plot_fixed_point(
             ax,
             fps[init_idx],
-            # xstar[init_idx:(init_idx+1)],
-            # J_xstar[init_idx],
+             #fps.xstar[init_idx:(init_idx+1)],
+             #fps.J_xstar[init_idx],
             pca,
             scale=mode_scale)
 
@@ -184,7 +190,7 @@ def plot_fixed_point(ax, fp, pca,
 		pca: PCA object as returned by sklearn.decomposition.PCA. This
 		is used to transform the high-d state space representations
 		into 3-d for visualization.
-
+mode_scale
 		scale (optional): Scale factor for stretching (>1) or shrinking
 		(<1) lines representing eigenmodes of the Jacobian. Default:
 		1.0 (unity).

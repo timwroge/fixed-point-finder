@@ -29,11 +29,11 @@ alr_hps = {'initial_rate': 0.0001, 'min_rate': 1e-5}
 
 hps = {
     'rnn_type': 'vanilla',
-    'n_hidden': 200, 
+    'n_hidden': 180,
     'min_loss': 1e-4,
     'noise_type': 0,
-    'noise_std': .02,
-    'log_dir': './logs_center_out/',
+    'noise_std': 0.08,
+    'log_dir': './logs_center_out_returning/',
     'data_hps': {
         'n_batch': 512,
         'n_time': 100,
@@ -92,14 +92,12 @@ initial_states = fpf.sample_states(example_predictions['state'],
 
 # Run the fixed point finder
 unique_fps, all_fps = fpf.find_fixed_points(initial_states, inputs)
-print(unique_fps) 
-print(all_fps) 
 
 # Visualize identified fixed points with overlaid RNN state trajectories
 # All visualized in the 3D PCA space fit the the example RNN states.
 plot_fps(unique_fps, example_predictions['state'],
     plot_batch_idx=range(512),
-    plot_start_time=0)
+    plot_start_time=0, conditions=example_trials['condition'])
 
 print('Entering debug mode to allow interaction with objects and figures.')
 pdb.set_trace()
