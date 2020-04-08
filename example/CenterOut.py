@@ -1,8 +1,9 @@
 '''
-flipflop.py
+CenterOut.py
 Written using Python 2.7.12
 @ Matt Golub, August 2018.
-Please direct correspondence to mgolub@stanford.edu.
+@ Modified by Tim Wroge, March 2020 for center out task
+Please direct correspondence to timothy.wroge@pitt.edu
 '''
 
 from __future__ import absolute_import
@@ -28,77 +29,14 @@ import matplotlib.pyplot as plt
 from RecurrentWhisperer import RecurrentWhisperer
 
 class CenterOut(RecurrentWhisperer):
-    ''' Class for training an RNN to implement an N-bit memory, a.k.a. "the
-    flip-flop  task" as described in Sussillo & Barak, Neural Computation,
-    2013.
-
-    Task:
-        Briefly, a set of inputs carry transient pulses (-1 or +1) to set the
-        state of a set of binary outputs (also -1 or +1). Each input drives
-        exactly one output. If the sign of an input pulse opposes the sign
-        currently held at the corresponding output, the sign of the output
-        flips. If an input pulse's sign matches that currently held at the
-        corresponding output, the output does not change.
-
-        This class generates synthetic data for the flip-flop task via
-        generate_flipflop_trials(...).
-
-    Usage:
-        This class trains an RNN to generate the correct outputs given the
-        inputs of the flip-flop task. All that is needed to get started is to
-        construct a flipflop object and to call .train on that object:
-
-        # dict of hyperparameter key/value pairs
-        # (see 'Hyperparameters' section below)
-        hps = {...}
-
-        ff = SineWave(**hps)
-        ff.train()
-
-    Hyperparameters:
-        rnn_type: string specifying the architecture of the RNN. Currently
-        must be one of {'vanilla', 'gru', 'lstm'}. Default: 'vanilla'.
-
-        n_hidden: int specifying the number of hidden units in the RNN.
-        Default: 24.
-
-        data_hps: dict containing hyperparameters for generating synthetic
-        data. Contains the following keys:
-
-            'n_batch': int specifying the number of synthetic trials to use
-            per training batch (i.e., for one gradient step). Default: 128.
-
-            'n_time': int specifying the duration of each synthetic trial
-            (measured in timesteps). Default: 256.
-
-            'n_bits': int specifying the number of input channels into the
-            SineWave device (which will also be the number of output channels).
-            Default: 3.
-
-            'p_flip': float between 0.0 and 1.0 specifying the probability
-            that a particular input channel at a particular timestep will
-            contain a pulse (-1 or +1) on top of its steady-state value (0).
-            Pulse signs are chosen by fair coin flips, and pulses are produced
-            with the same statistics across all input channels and across all
-            timesteps (i.e., there are no history effects, there are no
-            interactions across input channels). Default: 0.2.
-
-        log_dir: string specifying the top-level directory for saving various
-        training runs (where each training run is specified by a different set
-        of hyperparameter settings). When tuning hyperparameters, log_dir is
-        meant to be constant across models. Default: '/tmp/flipflop_logs/'.
-
-        n_trials_plot: int specifying the number of synthetic trials to plot
-        per visualization update. Default: 4.
-    '''
 
     @staticmethod
     def _default_hash_hyperparameters():
-        '''Defines default hyperparameters, specific to SineWave, for the set
+        '''Defines default hyperparameters, specific to CenterOut, for the set
         of hyperparameters that are hashed to define a directory structure for
         easily managing multiple runs of the RNN training (i.e., using
         different hyperparameter settings). Additional default hyperparameters
-        are defined in RecurrentWhisperer (from which SineWave inherits).
+        are defined in RecurrentWhisperer (from which CenterOut inherits).
 
         Args:
             None.
@@ -120,9 +58,9 @@ class CenterOut(RecurrentWhisperer):
 
     @staticmethod
     def _default_non_hash_hyperparameters():
-        '''Defines default hyperparameters, specific to SineWave, for the set
+        '''Defines default hyperparameters, specific to CenterOut, for the set
         of hyperparameters that are NOT hashed. Additional default
-        hyperparameters are defined in RecurrentWhisperer (from which SineWave
+        hyperparameters are defined in RecurrentWhisperer (from which CenterOut
         inherits).
 
         Args:
@@ -137,7 +75,7 @@ class CenterOut(RecurrentWhisperer):
 
             # DO NOT OVERWRITE THESE VALUES.
             # See docstrings in recurrent_whisperer.py for definitions. The
-            # values given here reflect that SineWave does not use (or require)
+            # values given here reflect that CenterOut does not use (or require)
             # validation data (because all trials are generated independently).
             'do_generate_lvl_visualizations': False,
             'do_save_lvl_visualizations': False,
@@ -379,7 +317,7 @@ class CenterOut(RecurrentWhisperer):
 
     def generate_trials(self, return_to_center=False):
         '''Generates synthetic data (i.e., ground truth trials) for the
-        SineWave task. See comments following FlipFlop class definition for a
+        CenterOut task. See comments following CenterOut class definition for a
         description of the input-output relationship in the task.
 
         Args:
@@ -392,7 +330,7 @@ class CenterOut(RecurrentWhisperer):
                 input pulses.
 
                 'outputs': [n_batch x n_time x n_bits] numpy array specifying
-                the correct behavior of the SineWave memory device.
+                the correct behavior of the CenterOut memory device.
         '''
 
         data_hps = self.hps.data_hps
@@ -429,10 +367,10 @@ class CenterOut(RecurrentWhisperer):
                 outputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
                 outputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
             else:
-                inputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
-                inputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
-                outputs[batch, when_trial_begins:when_trial_ends, 0] = x_component
-                outputs[batch, when_trial_begins:when_trial_ends, 1] = y_component
+                inputs[batch, when_trial_begins:, 0] = x_component
+                inputs[batch, when_trial_begins:, 1] = y_component
+                outputs[batch, when_trial_begins:, 0] = x_component
+                outputs[batch, when_trial_begins:, 1] = y_component
 
         return {'inputs': inputs, 'output': outputs, 'condition': conditions}
 

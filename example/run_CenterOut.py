@@ -1,7 +1,8 @@
 '''
-run_SineWave.py
+run_CenterOut.py
 Written using Python 2.7.12
 @ Matt Golub, October 2018.
+@ Modified by Tim Wroge, March 2020 for center out task
 Please direct correspondence to mgolub@stanford.edu.
 '''
 
@@ -21,7 +22,7 @@ from FixedPoints import FixedPoints
 from plot_utils import plot_fps
 
 # ***************************************************************************
-# STEP 1: Train an RNN to solve the N-bit memory task ***********************
+# STEP 1: Train an RNN to solve the CenterOut memory task ***********************
 # ***************************************************************************
 
 # Hyperparameters for AdaptiveLearningRate
